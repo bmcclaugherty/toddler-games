@@ -4,6 +4,63 @@ const drawingTemplates = [
     { id: 'cheetah', name: 'Cheetah', imageUrl: 'img/templates/cheetah.png' }
 ];
 
+// Save drawing to localStorage
+function saveDrawing(template, canvas) {
+    const drawingData = canvas.toDataURL();
+    localStorage.setItem(`drawing_${template.id}`, drawingData);
+}
+
+// Load drawing from localStorage
+function loadDrawing(template, canvas, ctx) {
+    const savedDrawing = localStorage.getItem(`drawing_${template.id}`);
+    if (savedDrawing) {
+        const image = new Image();
+        image.src = savedDrawing;
+        image.onload = () => {
+            ctx.drawImage(image, 0, 0);
+        };
+        return true;
+    }
+    return false;
+}
+
+// Create a preview canvas for the template card
+function createTemplatePreview(template, width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.className = 'template-preview';
+    const ctx = canvas.getContext('2d');
+
+    // Load the template image first
+    const templateImage = new Image();
+    templateImage.src = template.imageUrl;
+
+    return new Promise((resolve) => {
+        templateImage.onload = () => {
+            // Draw template with opacity
+            ctx.globalAlpha = 0.3;
+            ctx.drawImage(templateImage, 0, 0, width, height);
+            ctx.globalAlpha = 1.0;
+
+            // Try to load saved drawing
+            const savedDrawing = localStorage.getItem(`drawing_${template.id}`);
+            if (savedDrawing) {
+                const savedImage = new Image();
+                savedImage.src = savedDrawing;
+                savedImage.onload = () => {
+                    ctx.drawImage(savedImage, 0, 0, width, height);
+                    resolve(canvas);
+                };
+                savedImage.onerror = () => resolve(canvas);
+            } else {
+                resolve(canvas);
+            }
+        };
+        templateImage.onerror = () => resolve(canvas);
+    });
+}
+
 function initializeDrawingGame() {
     const mainContainer = document.getElementById('app-container');
     mainContainer.innerHTML = ''; // Clear existing content
@@ -27,25 +84,27 @@ function initializeDrawingGame() {
     templatesContainer.className = 'templates-container';
     
     // Create template cards
-    drawingTemplates.forEach(template => {
-        const templateCard = document.createElement('div');
-        templateCard.className = 'template-card';
-        
-        const templateImage = document.createElement('img');
-        templateImage.src = template.imageUrl;
-        templateImage.alt = template.name;
-        templateImage.className = 'template-image';
-        
-        const templateName = document.createElement('div');
-        templateName.textContent = template.name;
-        templateName.className = 'template-name';
-        
-        templateCard.appendChild(templateImage);
-        templateCard.appendChild(templateName);
-        
-        templateCard.addEventListener('click', () => startDrawing(template));
-        templatesContainer.appendChild(templateCard);
-    });
+    const createCards = async () => {
+        for (const template of drawingTemplates) {
+            const templateCard = document.createElement('div');
+            templateCard.className = 'template-card';
+            
+            // Create preview canvas instead of static image
+            const previewCanvas = await createTemplatePreview(template, 200, 150);
+            
+            const templateName = document.createElement('div');
+            templateName.textContent = template.name;
+            templateName.className = 'template-name';
+            
+            templateCard.appendChild(previewCanvas);
+            templateCard.appendChild(templateName);
+            
+            templateCard.addEventListener('click', () => startDrawing(template));
+            templatesContainer.appendChild(templateCard);
+        }
+    };
+    
+    createCards();
     
     mainContainer.appendChild(backButton);
     mainContainer.appendChild(gameTitle);
@@ -60,7 +119,11 @@ function startDrawing(template) {
     const backButton = document.createElement('button');
     backButton.textContent = '← Back to Templates';
     backButton.className = 'back-button';
-    backButton.addEventListener('click', initializeDrawingGame);
+    backButton.addEventListener('click', () => {
+        // Save the current drawing before going back
+        saveDrawing(template, canvas);
+        initializeDrawingGame();
+    });
     
     // Create canvas container
     const canvasContainer = document.createElement('div');
@@ -78,13 +141,19 @@ function startDrawing(template) {
     templateImage.src = template.imageUrl;
     templateImage.onload = () => {
         const ctx = canvas.getContext('2d');
-        // Draw template image with some opacity
-        ctx.globalAlpha = 0.3;
-        ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
-        ctx.globalAlpha = 1.0;
+        
+        // Try to load saved drawing first
+        const hasSavedDrawing = loadDrawing(template, canvas, ctx);
+        
+        if (!hasSavedDrawing) {
+            // If no saved drawing, draw template image with opacity
+            ctx.globalAlpha = 0.3;
+            ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1.0;
+        }
         
         // Set up drawing functionality
-        setupDrawing(canvas);
+        setupDrawing(canvas, template);
     };
     
     canvasContainer.appendChild(canvas);
@@ -270,18 +339,29 @@ function createDrawingControls(canvas) {
     return controls;
 }
 
-function setupDrawing(canvas) {
+function setupDrawing(canvas, template) {
     const ctx = canvas.getContext('2d');
     let isDrawing = false;
     let lastX = 0;
     let lastY = 0;
     let sprayInterval = null;
+    let autoSaveTimeout = null;
     
     ctx.strokeStyle = '#000000';
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.lineWidth = 8; // Set default to medium brush
     canvas.setAttribute('data-brush', 'normal');
+    
+    // Auto-save function
+    function autoSave() {
+        if (autoSaveTimeout) {
+            clearTimeout(autoSaveTimeout);
+        }
+        autoSaveTimeout = setTimeout(() => {
+            saveDrawing(template, canvas);
+        }, 2000); // Auto-save 2 seconds after last drawing action
+    }
     
     function spray(x, y) {
         const spread = ctx.lineWidth;
@@ -296,6 +376,7 @@ function setupDrawing(canvas) {
             ctx.arc(x + offsetX, y + offsetY, size, 0, Math.PI * 2);
             ctx.fill();
         }
+        autoSave();
     }
     
     function draw(e) {
@@ -314,6 +395,7 @@ function setupDrawing(canvas) {
             ctx.moveTo(lastX, lastY);
             ctx.lineTo(x, y);
             ctx.stroke();
+            autoSave();
         }
         
         [lastX, lastY] = [x, y];
