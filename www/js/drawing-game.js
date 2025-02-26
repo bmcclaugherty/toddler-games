@@ -1,0 +1,379 @@
+// Drawing game implementation
+const drawingTemplates = [
+    { id: 'dinosaur', name: 'Dinosaur', imageUrl: 'img/templates/dinosaur.png' },
+    { id: 'cheetah', name: 'Cheetah', imageUrl: 'img/templates/cheetah.png' }
+];
+
+function initializeDrawingGame() {
+    const mainContainer = document.getElementById('app-container');
+    mainContainer.innerHTML = ''; // Clear existing content
+    
+    // Create back button
+    const backButton = document.createElement('button');
+    backButton.textContent = '← Back';
+    backButton.className = 'back-button';
+    backButton.addEventListener('click', () => {
+        mainContainer.innerHTML = '';
+        initializeMainMenu();
+    });
+    
+    // Create game title
+    const gameTitle = document.createElement('h1');
+    gameTitle.textContent = 'Choose a Picture to Draw';
+    gameTitle.className = 'game-title';
+    
+    // Create templates container
+    const templatesContainer = document.createElement('div');
+    templatesContainer.className = 'templates-container';
+    
+    // Create template cards
+    drawingTemplates.forEach(template => {
+        const templateCard = document.createElement('div');
+        templateCard.className = 'template-card';
+        
+        const templateImage = document.createElement('img');
+        templateImage.src = template.imageUrl;
+        templateImage.alt = template.name;
+        templateImage.className = 'template-image';
+        
+        const templateName = document.createElement('div');
+        templateName.textContent = template.name;
+        templateName.className = 'template-name';
+        
+        templateCard.appendChild(templateImage);
+        templateCard.appendChild(templateName);
+        
+        templateCard.addEventListener('click', () => startDrawing(template));
+        templatesContainer.appendChild(templateCard);
+    });
+    
+    mainContainer.appendChild(backButton);
+    mainContainer.appendChild(gameTitle);
+    mainContainer.appendChild(templatesContainer);
+}
+
+function startDrawing(template) {
+    const mainContainer = document.getElementById('app-container');
+    mainContainer.innerHTML = '';
+    
+    // Create back button
+    const backButton = document.createElement('button');
+    backButton.textContent = '← Back to Templates';
+    backButton.className = 'back-button';
+    backButton.addEventListener('click', initializeDrawingGame);
+    
+    // Create canvas container
+    const canvasContainer = document.createElement('div');
+    canvasContainer.className = 'canvas-container';
+    
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    canvas.className = 'drawing-canvas';
+    canvas.width = window.innerWidth * 0.9;
+    canvas.height = window.innerHeight * 0.7;
+    canvas.setAttribute('data-template', template.imageUrl);
+    
+    // Load template image
+    const templateImage = new Image();
+    templateImage.src = template.imageUrl;
+    templateImage.onload = () => {
+        const ctx = canvas.getContext('2d');
+        // Draw template image with some opacity
+        ctx.globalAlpha = 0.3;
+        ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1.0;
+        
+        // Set up drawing functionality
+        setupDrawing(canvas);
+    };
+    
+    canvasContainer.appendChild(canvas);
+    
+    // Create color picker and brush size controls
+    const controls = createDrawingControls(canvas);
+    
+    mainContainer.appendChild(backButton);
+    mainContainer.appendChild(canvasContainer);
+    mainContainer.appendChild(controls);
+}
+
+function createDrawingControls(canvas) {
+    const controls = document.createElement('div');
+    controls.className = 'drawing-controls';
+    
+    // Create brush picker container
+    const brushPicker = document.createElement('div');
+    brushPicker.className = 'brush-picker';
+    
+    // Define brush options
+    const brushes = [
+        { name: 'Thin', width: 3, style: 'round' },
+        { name: 'Medium', width: 8, style: 'round' },
+        { name: 'Thick', width: 15, style: 'round' },
+        { name: 'Square Thin', width: 3, style: 'square' },
+        { name: 'Square Thick', width: 12, style: 'square' },
+        { name: 'Spray', width: 20, style: 'spray' }
+    ];
+    
+    // Create brush preview canvas
+    function createBrushPreview(brush) {
+        const preview = document.createElement('canvas');
+        preview.width = 80;
+        preview.height = 40;
+        const ctx = preview.getContext('2d');
+        
+        // Draw the brush stroke preview
+        ctx.strokeStyle = '#000000';
+        
+        if (brush.style === 'spray') {
+            // Create spray effect preview
+            ctx.fillStyle = ctx.strokeStyle;
+            for (let i = 0; i < 50; i++) {
+                const spread = brush.width;
+                const x = 40 + (Math.random() * spread * 2 - spread);
+                const y = 20 + (Math.random() * spread / 2 - spread / 4);
+                const size = Math.random() * 1.5;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else {
+            ctx.lineWidth = brush.width;
+            ctx.lineCap = brush.style;
+            ctx.lineJoin = brush.style;
+            ctx.beginPath();
+            ctx.moveTo(20, 20);
+            ctx.lineTo(60, 20);
+            ctx.stroke();
+        }
+        
+        return preview;
+    }
+    
+    // Create brush buttons
+    brushes.forEach(brush => {
+        const brushButton = document.createElement('button');
+        brushButton.className = 'brush-button';
+        if (canvas.getContext('2d').lineWidth === brush.width && 
+            ((brush.style === 'spray' && canvas.getAttribute('data-brush') === 'spray') ||
+             (brush.style !== 'spray' && canvas.getContext('2d').lineCap === brush.style))) {
+            brushButton.classList.add('selected');
+        }
+        
+        // Create brush preview
+        const preview = createBrushPreview(brush);
+        brushButton.appendChild(preview);
+        
+        // Add brush name
+        const brushName = document.createElement('span');
+        brushName.textContent = brush.name;
+        brushName.className = 'brush-name';
+        brushButton.appendChild(brushName);
+        
+        brushButton.addEventListener('click', () => {
+            // Remove selected class from all brush buttons
+            document.querySelectorAll('.brush-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            // Add selected class to clicked button
+            brushButton.classList.add('selected');
+            
+            // Update canvas brush style
+            const ctx = canvas.getContext('2d');
+            ctx.lineWidth = brush.width;
+            if (brush.style === 'spray') {
+                canvas.setAttribute('data-brush', 'spray');
+            } else {
+                canvas.setAttribute('data-brush', 'normal');
+                ctx.lineCap = brush.style;
+                ctx.lineJoin = brush.style;
+            }
+        });
+        
+        brushPicker.appendChild(brushButton);
+    });
+    
+    // Create color picker container
+    const colorPicker = document.createElement('div');
+    colorPicker.className = 'color-picker';
+    
+    // Define child-friendly colors
+    const colors = [
+        { name: 'Black', value: '#000000' },
+        { name: 'Red', value: '#FF4136' },
+        { name: 'Blue', value: '#0074D9' },
+        { name: 'Green', value: '#2ECC40' },
+        { name: 'Yellow', value: '#FFDC00' },
+        { name: 'Purple', value: '#B10DC9' },
+        { name: 'Orange', value: '#FF851B' },
+        { name: 'Pink', value: '#FF69B4' }
+    ];
+    
+    // Create color buttons
+    colors.forEach(color => {
+        const colorButton = document.createElement('button');
+        colorButton.className = 'color-button';
+        colorButton.style.backgroundColor = color.value;
+        colorButton.title = color.name;
+        colorButton.setAttribute('aria-label', `Choose ${color.name} color`);
+        
+        // Add white border to current color
+        if (canvas.getContext('2d').strokeStyle === color.value) {
+            colorButton.classList.add('selected');
+        }
+        
+        colorButton.addEventListener('click', () => {
+            // Remove selected class from all buttons
+            document.querySelectorAll('.color-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            // Add selected class to clicked button
+            colorButton.classList.add('selected');
+            // Update canvas stroke style
+            canvas.getContext('2d').strokeStyle = color.value;
+            
+            // Update all brush previews with new color
+            document.querySelectorAll('.brush-button canvas').forEach(preview => {
+                const ctx = preview.getContext('2d');
+                ctx.clearRect(0, 0, preview.width, preview.height);
+                ctx.strokeStyle = color.value;
+                ctx.beginPath();
+                ctx.moveTo(20, 20);
+                ctx.lineTo(60, 20);
+                ctx.stroke();
+            });
+        });
+        
+        colorPicker.appendChild(colorButton);
+    });
+    
+    // Add clear button
+    const clearButton = document.createElement('button');
+    clearButton.textContent = 'Clear Drawing';
+    clearButton.className = 'control-button';
+    clearButton.addEventListener('click', () => {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Redraw template image with opacity
+        const templateImage = new Image();
+        templateImage.src = canvas.getAttribute('data-template');
+        templateImage.onload = () => {
+            ctx.globalAlpha = 0.3;
+            ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1.0;
+        };
+    });
+    
+    controls.appendChild(brushPicker);
+    controls.appendChild(colorPicker);
+    controls.appendChild(clearButton);
+    return controls;
+}
+
+function setupDrawing(canvas) {
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+    let sprayInterval = null;
+    
+    ctx.strokeStyle = '#000000';
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 8; // Set default to medium brush
+    canvas.setAttribute('data-brush', 'normal');
+    
+    function spray(x, y) {
+        const spread = ctx.lineWidth;
+        const density = spread * 2;
+        
+        for (let i = 0; i < density; i++) {
+            const offsetX = Math.random() * spread * 2 - spread;
+            const offsetY = Math.random() * spread * 2 - spread;
+            const size = Math.random() * 1.5;
+            
+            ctx.beginPath();
+            ctx.arc(x + offsetX, y + offsetY, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    
+    function draw(e) {
+        if (!isDrawing) return;
+        
+        // Get correct coordinates for touch or mouse event
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+        const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+        
+        if (canvas.getAttribute('data-brush') === 'spray') {
+            ctx.fillStyle = ctx.strokeStyle;
+            spray(x, y);
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+        
+        [lastX, lastY] = [x, y];
+    }
+    
+    // Mouse Events
+    canvas.addEventListener('mousedown', (e) => {
+        isDrawing = true;
+        [lastX, lastY] = [e.offsetX, e.offsetY];
+        if (canvas.getAttribute('data-brush') === 'spray') {
+            ctx.fillStyle = ctx.strokeStyle;
+            spray(lastX, lastY);
+            sprayInterval = setInterval(() => {
+                if (isDrawing) spray(lastX, lastY);
+            }, 50);
+        }
+    });
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', () => {
+        isDrawing = false;
+        if (sprayInterval) {
+            clearInterval(sprayInterval);
+            sprayInterval = null;
+        }
+    });
+    canvas.addEventListener('mouseout', () => {
+        isDrawing = false;
+        if (sprayInterval) {
+            clearInterval(sprayInterval);
+            sprayInterval = null;
+        }
+    });
+    
+    // Touch Events
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isDrawing = true;
+        const rect = canvas.getBoundingClientRect();
+        [lastX, lastY] = [
+            e.touches[0].clientX - rect.left,
+            e.touches[0].clientY - rect.top
+        ];
+        if (canvas.getAttribute('data-brush') === 'spray') {
+            ctx.fillStyle = ctx.strokeStyle;
+            spray(lastX, lastY);
+            sprayInterval = setInterval(() => {
+                if (isDrawing) spray(lastX, lastY);
+            }, 50);
+        }
+    });
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        draw(e);
+    });
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        isDrawing = false;
+        if (sprayInterval) {
+            clearInterval(sprayInterval);
+            sprayInterval = null;
+        }
+    });
+} 
