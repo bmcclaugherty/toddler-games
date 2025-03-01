@@ -27,9 +27,12 @@ function loadDrawing(template, canvas, ctx) {
 // Create a preview canvas for the template card
 function createTemplatePreview(template, width, height) {
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    // Make preview size responsive based on screen size
+    const previewSize = Math.min(window.innerWidth * 0.4, 200);
+    canvas.width = previewSize;
+    canvas.height = previewSize * 0.75;
     canvas.className = 'template-preview';
+    canvas.style.maxWidth = '100%';
     const ctx = canvas.getContext('2d');
 
     // Load the template image first
@@ -45,19 +48,19 @@ function createTemplatePreview(template, width, height) {
                 savedImage.src = savedDrawing;
                 savedImage.onload = () => {
                     // Draw the saved drawing first
-                    ctx.drawImage(savedImage, 0, 0, width, height);
+                    ctx.drawImage(savedImage, 0, 0, canvas.width, canvas.height);
                     // Then draw template image on top with full opacity
-                    ctx.drawImage(templateImage, 0, 0, width, height);
+                    ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
                     resolve(canvas);
                 };
                 savedImage.onerror = () => {
                     // If saved drawing fails to load, just show template
-                    ctx.drawImage(templateImage, 0, 0, width, height);
+                    ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
                     resolve(canvas);
                 };
             } else {
                 // If no saved drawing, just show template
-                ctx.drawImage(templateImage, 0, 0, width, height);
+                ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
                 resolve(canvas);
             }
         };
@@ -133,22 +136,47 @@ function startDrawing(template) {
     const canvasContainer = document.createElement('div');
     canvasContainer.className = 'canvas-container';
     
+    // Calculate canvas size based on screen dimensions
+    const aspectRatio = 4/3; // Maintain 4:3 aspect ratio
+    let canvasWidth, canvasHeight;
+    
+    if (window.innerWidth < 768) { // Mobile devices
+        canvasWidth = window.innerWidth * 0.95;
+        canvasHeight = canvasWidth / aspectRatio;
+        
+        // Ensure the canvas doesn't take up too much vertical space on mobile
+        const maxHeight = window.innerHeight * 0.6;
+        if (canvasHeight > maxHeight) {
+            canvasHeight = maxHeight;
+            canvasWidth = canvasHeight * aspectRatio;
+        }
+    } else { // Tablets and larger devices
+        canvasWidth = Math.min(window.innerWidth * 0.8, 1000);
+        canvasHeight = canvasWidth / aspectRatio;
+    }
+    
     // Create canvas
     const canvas = document.createElement('canvas');
     canvas.className = 'drawing-canvas';
-    canvas.width = window.innerWidth * 0.9;
-    canvas.height = window.innerHeight * 0.7;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    canvas.style.maxWidth = '100%';
     canvas.setAttribute('data-template', template.imageUrl);
     
     // Create an overlay canvas for the template
     const templateCanvas = document.createElement('canvas');
     templateCanvas.className = 'template-overlay';
-    templateCanvas.width = canvas.width;
-    templateCanvas.height = canvas.height;
+    templateCanvas.width = canvasWidth;
+    templateCanvas.height = canvasHeight;
     templateCanvas.style.position = 'absolute';
-    templateCanvas.style.pointerEvents = 'none'; // Make it non-interactive
+    templateCanvas.style.pointerEvents = 'none';
     templateCanvas.style.top = '0';
     templateCanvas.style.left = '0';
+    templateCanvas.style.maxWidth = '100%';
+    
+    // Add touch-action manipulation for better touch handling
+    canvas.style.touchAction = 'none';
+    templateCanvas.style.touchAction = 'none';
     
     // Load template image
     const templateImage = new Image();
@@ -161,13 +189,15 @@ function startDrawing(template) {
         const hasSavedDrawing = loadDrawing(template, canvas, ctx);
         
         // Draw template on the overlay canvas
-        templateCtx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
+        templateCtx.drawImage(templateImage, 0, 0, canvasWidth, canvasHeight);
         
         // Set up drawing functionality
         setupDrawing(canvas, template);
     };
     
-    canvasContainer.style.position = 'relative'; // For proper overlay positioning
+    canvasContainer.style.position = 'relative';
+    canvasContainer.style.maxWidth = '100%';
+    canvasContainer.style.margin = '0 auto';
     canvasContainer.appendChild(canvas);
     canvasContainer.appendChild(templateCanvas);
     
@@ -182,10 +212,19 @@ function startDrawing(template) {
 function createDrawingControls(canvas) {
     const controls = document.createElement('div');
     controls.className = 'drawing-controls';
+    controls.style.maxWidth = '100%';
+    controls.style.padding = '10px';
+    controls.style.overflowX = 'auto';
+    controls.style.WebkitOverflowScrolling = 'touch'; // Smooth scrolling on iOS
     
     // Create brush picker container
     const brushPicker = document.createElement('div');
     brushPicker.className = 'brush-picker';
+    brushPicker.style.display = 'flex';
+    brushPicker.style.gap = '10px';
+    brushPicker.style.flexWrap = 'nowrap';
+    brushPicker.style.overflowX = 'auto';
+    brushPicker.style.padding = '5px';
     
     // Define brush options
     const brushes = [
@@ -198,20 +237,21 @@ function createDrawingControls(canvas) {
     // Create brush preview canvas
     function createBrushPreview(brush) {
         const preview = document.createElement('canvas');
-        preview.width = 80;
-        preview.height = 40;
+        // Make preview size smaller on mobile
+        const previewSize = window.innerWidth < 768 ? 60 : 80;
+        preview.width = previewSize;
+        preview.height = previewSize / 2;
         const ctx = preview.getContext('2d');
         
         // Draw the brush stroke preview
         ctx.strokeStyle = '#000000';
         
         if (brush.style === 'spray') {
-            // Create spray effect preview
             ctx.fillStyle = ctx.strokeStyle;
             for (let i = 0; i < 50; i++) {
                 const spread = brush.width;
-                const x = 40 + (Math.random() * spread * 2 - spread);
-                const y = 20 + (Math.random() * spread / 2 - spread / 4);
+                const x = preview.width/2 + (Math.random() * spread * 2 - spread);
+                const y = preview.height/2 + (Math.random() * spread/2 - spread/4);
                 const size = Math.random() * 1.5;
                 ctx.beginPath();
                 ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -222,8 +262,8 @@ function createDrawingControls(canvas) {
             ctx.lineCap = brush.style;
             ctx.lineJoin = brush.style;
             ctx.beginPath();
-            ctx.moveTo(20, 20);
-            ctx.lineTo(60, 20);
+            ctx.moveTo(preview.width * 0.25, preview.height/2);
+            ctx.lineTo(preview.width * 0.75, preview.height/2);
             ctx.stroke();
         }
         
