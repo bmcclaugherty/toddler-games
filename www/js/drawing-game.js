@@ -190,9 +190,7 @@ function createDrawingControls(canvas) {
     // Define brush options
     const brushes = [
         { name: 'Thin', width: 3, style: 'round' },
-        { name: 'Medium', width: 8, style: 'round' },
         { name: 'Thick', width: 15, style: 'round' },
-        { name: 'Square Thin', width: 3, style: 'square' },
         { name: 'Square Thick', width: 12, style: 'square' },
         { name: 'Spray', width: 20, style: 'spray' }
     ];
