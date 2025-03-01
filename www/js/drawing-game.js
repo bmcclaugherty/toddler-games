@@ -38,22 +38,26 @@ function createTemplatePreview(template, width, height) {
 
     return new Promise((resolve) => {
         templateImage.onload = () => {
-            // Draw template with opacity
-            ctx.globalAlpha = 0.3;
-            ctx.drawImage(templateImage, 0, 0, width, height);
-            ctx.globalAlpha = 1.0;
-
-            // Try to load saved drawing
+            // Try to load saved drawing first
             const savedDrawing = localStorage.getItem(`drawing_${template.id}`);
             if (savedDrawing) {
                 const savedImage = new Image();
                 savedImage.src = savedDrawing;
                 savedImage.onload = () => {
+                    // Draw the saved drawing first
                     ctx.drawImage(savedImage, 0, 0, width, height);
+                    // Then draw template image on top with full opacity
+                    ctx.drawImage(templateImage, 0, 0, width, height);
                     resolve(canvas);
                 };
-                savedImage.onerror = () => resolve(canvas);
+                savedImage.onerror = () => {
+                    // If saved drawing fails to load, just show template
+                    ctx.drawImage(templateImage, 0, 0, width, height);
+                    resolve(canvas);
+                };
             } else {
+                // If no saved drawing, just show template
+                ctx.drawImage(templateImage, 0, 0, width, height);
                 resolve(canvas);
             }
         };
@@ -136,27 +140,36 @@ function startDrawing(template) {
     canvas.height = window.innerHeight * 0.7;
     canvas.setAttribute('data-template', template.imageUrl);
     
+    // Create an overlay canvas for the template
+    const templateCanvas = document.createElement('canvas');
+    templateCanvas.className = 'template-overlay';
+    templateCanvas.width = canvas.width;
+    templateCanvas.height = canvas.height;
+    templateCanvas.style.position = 'absolute';
+    templateCanvas.style.pointerEvents = 'none'; // Make it non-interactive
+    templateCanvas.style.top = '0';
+    templateCanvas.style.left = '0';
+    
     // Load template image
     const templateImage = new Image();
     templateImage.src = template.imageUrl;
     templateImage.onload = () => {
         const ctx = canvas.getContext('2d');
+        const templateCtx = templateCanvas.getContext('2d');
         
         // Try to load saved drawing first
         const hasSavedDrawing = loadDrawing(template, canvas, ctx);
         
-        if (!hasSavedDrawing) {
-            // If no saved drawing, draw template image with opacity
-            ctx.globalAlpha = 0.3;
-            ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
-            ctx.globalAlpha = 1.0;
-        }
+        // Draw template on the overlay canvas
+        templateCtx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
         
         // Set up drawing functionality
         setupDrawing(canvas, template);
     };
     
+    canvasContainer.style.position = 'relative'; // For proper overlay positioning
     canvasContainer.appendChild(canvas);
+    canvasContainer.appendChild(templateCanvas);
     
     // Create color picker and brush size controls
     const controls = createDrawingControls(canvas);
@@ -323,14 +336,6 @@ function createDrawingControls(canvas) {
     clearButton.addEventListener('click', () => {
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Redraw template image with opacity
-        const templateImage = new Image();
-        templateImage.src = canvas.getAttribute('data-template');
-        templateImage.onload = () => {
-            ctx.globalAlpha = 0.3;
-            ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
-            ctx.globalAlpha = 1.0;
-        };
     });
     
     controls.appendChild(brushPicker);
